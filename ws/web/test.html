@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>WebSocket Test</title>
+    <style>
+      body {
+        font-family: sans-serif;
+        margin: 2rem;
+      }
+      button {
+        margin-right: 0.5rem;
+      }
+      pre {
+        background: #f4f4f4;
+        padding: 1rem;
+        border-radius: 6px;
+        height: 200px;
+        overflow-y: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>WebSocket Test</h1>
+    <button id="connect">Connect</button>
+    <button id="start">Start Sending (client ping)</button>
+    <button id="stop">Stop Sending</button>
+    <pre id="log"></pre>
+
+    <script>
+      let socket;
+      let i; // interval for client-side pings
+      const logEl = document.getElementById("log");
+      const log = (...args) => {
+        logEl.textContent += args.join(" ") + "\n";
+        logEl.scrollTop = logEl.scrollHeight;
+      };
+
+      const connect_btn = document.querySelector("#connect");
+      const start_btn = document.querySelector("#start");
+      const stop_btn = document.querySelector("#stop");
+
+      // --- CONNECT ---------------------------------------------------
+      connect_btn.addEventListener("click", () => {
+        if (socket && socket.readyState === WebSocket.OPEN) {
+          log("Already connected.");
+          return;
+        }
+
+        socket = new WebSocket("ws://localhost:4000/ws");
+
+        socket.onopen = () => {
+          log("OPEN ✅");
+        };
+
+        socket.onmessage = (event) => {
+          log("ECHO FROM SERVER:", event.data);
+        };
+
+        socket.onerror = (error) => {
+          log("ERROR:", error);
+        };
+
+        socket.onclose = (event) => {
+          log("CLOSE:", event.code, event.reason);
+          if (i) {
+            clearInterval(i);
+            i = null;
+          }
+        };
+      });
+
+      // --- CLIENT TEST: SEND TEXT "ping" EVERY 5s ----------------------
+      start_btn.addEventListener("click", () => {
+        if (!socket || socket.readyState !== WebSocket.OPEN) {
+          log("Not connected yet.");
+          return;
+        }
+        if (i) {
+          log("Already sending pings.");
+          return;
+        }
+
+        i = setInterval(() => {
+          if (socket.readyState === WebSocket.OPEN) {
+            const msg = "client-ping " + Date.now();
+            socket.send(msg);
+            log("SEND (client ping):", msg);
+          }
+        }, 5000);
+
+        log("Started client-side ping loop (every 5s).");
+      });
+
+      // --- STOP CLIENT PINGS ------------------------------------------
+      stop_btn.addEventListener("click", () => {
+        if (i) {
+          clearInterval(i);
+          i = null;
+          log("Stopped client-side ping loop.");
+        } else {
+          log("Nothing to stop.");
+        }
+      });
+    </script>
+  </body>
+</html>
