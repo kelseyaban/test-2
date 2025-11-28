@@ -77,6 +77,7 @@ type CommandResponse struct {
     Result  float64 `json:"result"`
     Command string  `json:"command"`
     Error   string  `json:"error,omitempty"`
+	History []string `json:"history,omitempty"`
 }
 
 // processCommand parses a JSON command payload and returns a JSON response.
@@ -175,9 +176,13 @@ func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 	// per-connection state: recent message timestamps for rate limiting
     var timestamps []time.Time
+	//command history
+	var lastCommands []string
+
     const (
         rateLimitWindow = time.Minute
         rateLimitMax    = 10
+		historyMax      = 5
     )
 
 	for {
@@ -239,12 +244,57 @@ func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 			payloadStr := string(payload)
             trimmed := strings.TrimSpace(payloadStr)
             if len(trimmed) > 0 && trimmed[0] == '{' {
+
+				// Inspect JSON to check for HISTORY command and record history for other commands
+                var req CommandRequest
+                if err := json.Unmarshal([]byte(trimmed), &req); err != nil {
+                    // send back JSON error response
+                    resp := CommandResponse{Command: "", Error: fmt.Sprintf("invalid JSON: %v", err)}
+                    b, _ := json.Marshal(resp)
+                    _ = conn.SetWriteDeadline(time.Now().Add(writeWait))
+                    if err := conn.WriteMessage(websocket.TextMessage, b); err != nil {
+                        log.Printf("write error: %v", err)
+                        break
+                    }
+                    continue
+                }
+
+                if strings.EqualFold(req.Command, "history") {
+                    // return history for this connection
+                    resp := CommandResponse{Command: "history", History: lastCommands}
+                    b, _ := json.Marshal(resp)
+                    _ = conn.SetWriteDeadline(time.Now().Add(writeWait))
+                    if err := conn.WriteMessage(websocket.TextMessage, b); err != nil {
+                        log.Printf("write error: %v", err)
+                        break
+                    }
+                    continue
+                }
+
+                // record this command payload in per-connection history
+                lastCommands = append(lastCommands, trimmed)
+                if len(lastCommands) > historyMax {
+                    lastCommands = lastCommands[len(lastCommands)-historyMax:]
+                }
+
                 respBytes, perr := processCommand([]byte(trimmed))
                 _ = conn.SetWriteDeadline(time.Now().Add(writeWait))
                 if perr != nil {
                     log.Printf("processCommand error: %v", perr)
                 }
                 if err := conn.WriteMessage(websocket.TextMessage, respBytes); err != nil {
+                    log.Printf("write error: %v", err)
+                    break
+                }
+                continue
+            }
+
+			// Plain-text HISTORY command handling
+            if strings.EqualFold(strings.TrimSpace(payloadStr), "HISTORY") {
+                resp := CommandResponse{Command: "history", History: lastCommands}
+                b, _ := json.Marshal(resp)
+                _ = conn.SetWriteDeadline(time.Now().Add(writeWait))
+                if err := conn.WriteMessage(websocket.TextMessage, b); err != nil {
                     log.Printf("write error: %v", err)
                     break
                 }
