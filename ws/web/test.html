@@ -24,6 +24,8 @@
     <h1>WebSocket Test</h1>
     <button id="connect">Connect</button>
     <button id="start">Start Sending (client ping)</button>
+    <input id="upper-input" placeholder="text to uppercase" />
+    <button id="upper-send">Send UPPER</button>
     <button id="stop">Stop Sending</button>
     <pre id="log"></pre>
 
@@ -39,6 +41,8 @@
       const connect_btn = document.querySelector("#connect");
       const start_btn = document.querySelector("#start");
       const stop_btn = document.querySelector("#stop");
+      const upperInput = document.querySelector("#upper-input");
+      const upperSend = document.querySelector("#upper-send");
 
       // --- CONNECT ---------------------------------------------------
       connect_btn.addEventListener("click", () => {
@@ -102,6 +106,19 @@
           log("Nothing to stop.");
         }
       });
+
+       // --- UPPER: send message to request uppercase from server ---------
+       upperSend.addEventListener("click", () => {
+        if (!socket || socket.readyState !== WebSocket.OPEN) {
+          log("Not connected yet.");
+          return;
+        }
+        const txt = upperInput.value || ""
+        const msg = "UPPER:" + txt
+        socket.send(msg)
+        log("SEND (UPPER):", msg)
+      });
+      
     </script>
   </body>
 </html>

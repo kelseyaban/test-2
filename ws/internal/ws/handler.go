@@ -131,6 +131,18 @@ func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 		// Echo back text messages
 		if msgType == websocket.TextMessage {
+			// Handle special commands like UPPER:
+            payloadStr := string(payload)
+            if strings.HasPrefix(payloadStr, "UPPER:") {
+                body := strings.TrimPrefix(payloadStr, "UPPER:")
+                body = strings.ToUpper(body)
+                _ = conn.SetWriteDeadline(time.Now().Add(writeWait))
+                if err := conn.WriteMessage(websocket.TextMessage, []byte(body)); err != nil {
+                    log.Printf("write error: %v", err)
+                    break
+                }
+                continue
+            }
 			_ = conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if err := conn.WriteMessage(websocket.TextMessage, payload); err != nil {
 				log.Printf("write error: %v", err)
