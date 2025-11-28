@@ -51,6 +51,15 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
+// reverseString returns a new string which is the Unicode-aware reversal of s.
+func reverseString(s string) string {
+    runes := []rune(s)
+    for i, j := 0, len(runes)-1; i < j; i, j = i+1, j-1 {
+        runes[i], runes[j] = runes[j], runes[i]
+    }
+    return string(runes)
+}
+
 // Attempt to upgrade from HTTP to RFC 6455
 func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	// Has to be an HTTP GET request
@@ -131,8 +140,20 @@ func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 		// Echo back text messages
 		if msgType == websocket.TextMessage {
-			// Handle special commands like UPPER:
+			// Handle special commands like UPPER: and REVERSE:
             payloadStr := string(payload)
+
+			if strings.HasPrefix(payloadStr, "REVERSE:") {
+                body := strings.TrimPrefix(payloadStr, "REVERSE:")
+                body = reverseString(body)
+                _ = conn.SetWriteDeadline(time.Now().Add(writeWait))
+                if err := conn.WriteMessage(websocket.TextMessage, []byte(body)); err != nil {
+                    log.Printf("write error: %v", err)
+                    break
+                }
+                continue
+            }
+
             if strings.HasPrefix(payloadStr, "UPPER:") {
                 body := strings.TrimPrefix(payloadStr, "UPPER:")
                 body = strings.ToUpper(body)

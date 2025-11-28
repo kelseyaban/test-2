@@ -26,6 +26,8 @@
     <button id="start">Start Sending (client ping)</button>
     <input id="upper-input" placeholder="text to uppercase" />
     <button id="upper-send">Send UPPER</button>
+    <input id="reverse-input" placeholder="text to reverse" />
+    <button id="reverse-send">Send REVERSE</button>
     <button id="stop">Stop Sending</button>
     <pre id="log"></pre>
 
@@ -43,6 +45,8 @@
       const stop_btn = document.querySelector("#stop");
       const upperInput = document.querySelector("#upper-input");
       const upperSend = document.querySelector("#upper-send");
+      const reverseInput = document.querySelector("#reverse-input");
+      const reverseSend = document.querySelector("#reverse-send");
 
       // --- CONNECT ---------------------------------------------------
       connect_btn.addEventListener("click", () => {
@@ -107,7 +111,7 @@
         }
       });
 
-       // --- UPPER: send message to request uppercase from server ---------
+       //UPPER: send message to request uppercase from server
        upperSend.addEventListener("click", () => {
         if (!socket || socket.readyState !== WebSocket.OPEN) {
           log("Not connected yet.");
@@ -119,6 +123,18 @@
         log("SEND (UPPER):", msg)
       });
       
+       //REVERSE: send message to request reversed text 
+       reverseSend.addEventListener("click", () => {
+        if (!socket || socket.readyState !== WebSocket.OPEN) {
+          log("Not connected yet.");
+          return;
+        }
+        const txt = reverseInput.value || ""
+        const msg = "REVERSE:" + txt
+        socket.send(msg)
+        log("SEND (REVERSE):", msg)
+      });
+
     </script>
   </body>
 </html>
