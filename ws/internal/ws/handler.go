@@ -172,6 +172,14 @@ func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	// Read/Echo loop
+
+	// per-connection state: recent message timestamps for rate limiting
+    var timestamps []time.Time
+    const (
+        rateLimitWindow = time.Minute
+        rateLimitMax    = 10
+    )
+
 	for {
 		msgType, payload, err := conn.ReadMessage()
 		if err != nil {
@@ -197,13 +205,38 @@ func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 		// Echo back text messages
 		if msgType == websocket.TextMessage {
-			// Handle special commands like UPPER: and REVERSE: and message counter 
-            payloadStr := string(payload)
+			now := time.Now()
+
+            // prune timestamps older than rateLimitWindow
+            j := 0
+            for _, ts := range timestamps {
+                if now.Sub(ts) < rateLimitWindow {
+                    timestamps[j] = ts
+                    j++
+                }
+            }
+            timestamps = timestamps[:j]
+
+            if len(timestamps) >= rateLimitMax {
+                // Too many messages: notify client and skip processing
+                _ = conn.SetWriteDeadline(time.Now().Add(writeWait))
+                warn := fmt.Sprintf("[RateLimit] too many messages - max %d per %s", rateLimitMax, rateLimitWindow)
+                if err := conn.WriteMessage(websocket.TextMessage, []byte(warn)); err != nil {
+                    log.Printf("write error (rate warn): %v", err)
+                    break
+                }
+                continue
+            }
+
+            // record this message
+            timestamps = append(timestamps, now)
+
 
 			//increment message counter
 			count := atomic.AddUint64(&messageCounter, 1)
 
-			// If payload looks like JSON, process it as a command and return JSON response
+			//process JSON command first 
+			payloadStr := string(payload)
             trimmed := strings.TrimSpace(payloadStr)
             if len(trimmed) > 0 && trimmed[0] == '{' {
                 respBytes, perr := processCommand([]byte(trimmed))
