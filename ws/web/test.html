@@ -28,6 +28,10 @@
     <button id="upper-send">Send UPPER</button>
     <input id="reverse-input" placeholder="text to reverse" />
     <button id="reverse-send">Send REVERSE</button>
+    <input id="cmd-input" placeholder="command (add/subtract/multiply/divide)" />
+    <input id="a-input" placeholder="a (number)" />
+    <input id="b-input" placeholder="b (number)" />
+    <button id="cmd-send">Send JSON Command</button>
     <button id="stop">Stop Sending</button>
     <pre id="log"></pre>
 
@@ -47,6 +51,10 @@
       const upperSend = document.querySelector("#upper-send");
       const reverseInput = document.querySelector("#reverse-input");
       const reverseSend = document.querySelector("#reverse-send");
+      const cmdInput = document.querySelector("#cmd-input");
+      const aInput = document.querySelector("#a-input");
+      const bInput = document.querySelector("#b-input");
+      const cmdSend = document.querySelector("#cmd-send");
 
       // --- CONNECT ---------------------------------------------------
       connect_btn.addEventListener("click", () => {
@@ -133,6 +141,21 @@
         const msg = "REVERSE:" + txt
         socket.send(msg)
         log("SEND (REVERSE):", msg)
+      });
+
+      //JSON command sender
+      cmdSend.addEventListener("click", () => {
+        if (!socket || socket.readyState !== WebSocket.OPEN) {
+          log("Not connected yet.");
+          return;
+        }
+        const command = (cmdInput.value || "").trim();
+        const a = parseFloat(aInput.value);
+        const b = parseFloat(bInput.value);
+        const obj = { command: command, a: a, b: b };
+        const msg = JSON.stringify(obj);
+        socket.send(msg);
+        log("SEND (JSON):", msg);
       });
 
     </script>

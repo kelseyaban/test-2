@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 	"sync/atomic"
+	"encoding/json"
 
 	"github.com/gorilla/websocket"
 )
@@ -63,6 +64,58 @@ func reverseString(s string) string {
 }
 
 var messageCounter uint64
+
+// CommandRequest represents an incoming JSON command.
+type CommandRequest struct {
+    Command string  `json:"command"`
+    A       float64 `json:"a"`
+    B       float64 `json:"b"`
+}
+
+// CommandResponse represents the JSON response for a command.
+type CommandResponse struct {
+    Result  float64 `json:"result"`
+    Command string  `json:"command"`
+    Error   string  `json:"error,omitempty"`
+}
+
+// processCommand parses a JSON command payload and returns a JSON response.
+func processCommand(payload []byte) ([]byte, error) {
+    var req CommandRequest
+    if err := json.Unmarshal(payload, &req); err != nil {
+        // return a JSON error response
+        resp := CommandResponse{Command: "", Error: fmt.Sprintf("invalid JSON: %v", err)}
+        b, _ := json.Marshal(resp)
+        return b, fmt.Errorf("invalid JSON: %w", err)
+    }
+
+    var res CommandResponse
+    res.Command = req.Command
+
+    switch strings.ToLower(req.Command) {
+    case "add":
+        res.Result = req.A + req.B
+    case "subtract":
+        res.Result = req.A - req.B
+    case "multiply":
+        res.Result = req.A * req.B
+    case "divide":
+        if req.B == 0 {
+            res.Error = "division by zero"
+        } else {
+            res.Result = req.A / req.B
+        }
+    default:
+        res.Error = fmt.Sprintf("unknown command: %s", req.Command)
+    }
+
+    b, err := json.Marshal(res)
+    if err != nil {
+        return nil, err
+    }
+    return b, nil
+}
+
 
 // Attempt to upgrade from HTTP to RFC 6455
 func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
@@ -149,6 +202,21 @@ func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 			//increment message counter
 			count := atomic.AddUint64(&messageCounter, 1)
+
+			// If payload looks like JSON, process it as a command and return JSON response
+            trimmed := strings.TrimSpace(payloadStr)
+            if len(trimmed) > 0 && trimmed[0] == '{' {
+                respBytes, perr := processCommand([]byte(trimmed))
+                _ = conn.SetWriteDeadline(time.Now().Add(writeWait))
+                if perr != nil {
+                    log.Printf("processCommand error: %v", perr)
+                }
+                if err := conn.WriteMessage(websocket.TextMessage, respBytes); err != nil {
+                    log.Printf("write error: %v", err)
+                    break
+                }
+                continue
+            }
 
 			// Prepare response body depending on command
             var respBody string
